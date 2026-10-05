@@ -26,7 +26,7 @@
 - `node:test` (built-in test runner, Node 20+).
 - `node:assert` for assertions.
 - Tests spin up the real HTTP server on an ephemeral port and use `fetch` (built-in Node 18+).
-- No mocks for the file system; tests use a `./data/test-*.json` scratch file cleaned up after.
+- No mocks for the file system; tests point `MEETUPPASS_DATA_DIR` at a temp dir so `./data` is never touched.
 
 ## Code Style
 - 2-space indentation.

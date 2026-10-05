@@ -14,7 +14,7 @@ Every public API endpoint must have at least one passing test. Tests are the sou
 ## Test File Location
 - All tests live in `test/`.
 - Entry point: `test/api.test.js`.
-- Test data files: `data/test-*.json` — created before tests, deleted after.
+- Test data lives in a `mkdtemp` dir set via `MEETUPPASS_DATA_DIR`, removed after the run.
 
 ## Test Structure
 ```js

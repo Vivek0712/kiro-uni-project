@@ -126,7 +126,7 @@ These universal properties are verified by property-based tests in `test/propert
 - *marks exactly that attendee's `checkedIn` field `true`, and*
 - *leaves all other attendees' `checkedIn` states unchanged.*
 
-**Validates:** US-3.1 (valid code accepted), US-3.2 (correct attendee record updated).
+**Validates:** US-2.1 (RSVP issues a pass code), US-3.1 (valid code checks in that attendee).
 
 ---
 
@@ -136,7 +136,7 @@ These universal properties are verified by property-based tests in `test/propert
 - *does not change `checkedIn` (remains `true`) or `checkedInAt` (timestamp is unchanged), and*
 - *does not affect any other attendee's record.*
 
-**Validates:** US-3.3 (duplicate check-in prevention), US-5.1 (data integrity).
+**Validates:** US-3.2 (duplicate check-in prevention).
 
 ---
 
@@ -145,7 +145,7 @@ These universal properties are verified by property-based tests in `test/propert
 - *`0 ≤ totalCheckedIn ≤ totalRsvp ≤ capacity`, and*
 - *`remaining = capacity − totalCheckedIn` (never negative).*
 
-**Validates:** US-4.1 (live stats accuracy), US-4.2 (capacity tracking).
+**Validates:** US-4.1 (attendance statistics and capacity).
 
 ---
 
@@ -154,7 +154,7 @@ These universal properties are verified by property-based tests in `test/propert
 - *returns HTTP 404, and*
 - *leaves the attendees collection entirely unchanged (read-back produces the same records).*
 
-**Validates:** US-3.4 (unknown code rejected), US-5.1 (state integrity on invalid input).
+**Validates:** US-3.3 (unknown code rejection).
 
 ---
 
@@ -163,4 +163,4 @@ These universal properties are verified by property-based tests in `test/propert
 - *contains exactly one header row followed by exactly one data row per attendee (no extra rows, no missing rows),*
 - *round-trips each `name` and `email` back to the original string when parsed with a standard RFC 4180 CSV parser (i.e., the values are correctly quoted and any embedded `"` are escaped as `""`).*
 
-**Validates:** US-4.3 (CSV export correctness), US-4.4 (data fidelity for analytics).
+**Validates:** US-5.1 (export attendees).
