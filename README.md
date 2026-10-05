@@ -12,6 +12,9 @@ The integration is **read-only** and **privacy-first**: every platform API respo
 
 ## Screenshots
 
+![Import meetups from awsugmdu.in](docs/screenshots/platform-import.png)
+*Import page — real meetups from the awsugmdu.in platform (PII-sanitized)*
+
 | Home — event list | RSVP pass + QR code |
 |:-----------------:|:-------------------:|
 | ![Home](docs/screenshots/home.png) | ![RSVP pass](docs/screenshots/rsvp-pass.png) |
