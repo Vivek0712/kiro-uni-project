@@ -2,7 +2,7 @@
 
 ## Overview
 
-MeetupPass is the official door check-in companion for the AWS User Group Madurai community platform at https://www.awsugmdu.in. The platform exposes a public read-only REST API; MeetupPass reads from it to import meetups and display stats. No platform write operations are ever performed.
+MeetupPass is a door check-in companion for the AWS User Group Madurai community platform at https://www.awsugmdu.in. The platform exposes a public read-only REST API; MeetupPass reads from it to import meetups and display stats. No platform write operations are ever performed.
 
 ## Platform API
 
