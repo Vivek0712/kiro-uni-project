@@ -8,22 +8,15 @@ MeetupPass is a lightweight, zero-dependency web app that replaces spreadsheets 
 
 ---
 
-## Screenshot
+## Screenshots
 
-```
-┌──────────────────────────────────────────────────────┐
-│  MeetupPass  |  Events  |  Check-In  |  Dashboard    │
-├──────────────────────────────────────────────────────┤
-│  🎟 Your MeetupPass                                  │
-│  AWS User Group Madurai – October Meetup 2026        │
-│  ┌─────────────────┐                                 │
-│  │  ▉▉▉ QR CODE ▉▉▉│  Pass Code: A1B2C3D4           │
-│  └─────────────────┘                                 │
-│  [ ⬇ Download Pass ]  [ ← Back to Events ]          │
-└──────────────────────────────────────────────────────┘
-```
+| Home — event list | RSVP pass + QR code |
+|:-----------------:|:-------------------:|
+| ![Home](docs/screenshots/home.png) | ![RSVP pass](docs/screenshots/rsvp-pass.png) |
 
-*(Replace with an actual screenshot for your demo video)*
+| Check-in success | Duplicate check-in rejected | Live dashboard |
+|:----------------:|:---------------------------:|:--------------:|
+| ![Check-in success](docs/screenshots/checkin-success.png) | ![Duplicate rejected](docs/screenshots/checkin-duplicate.png) | ![Dashboard](docs/screenshots/dashboard.png) |
 
 ---
 
@@ -33,10 +26,10 @@ MeetupPass is a lightweight, zero-dependency web app that replaces spreadsheets 
 # Prerequisites: Node.js 20+
 git clone <repo-url>
 cd kiro-uni-project
-npm install          # no runtime dependencies — installs nothing
+npm install          # installs fast-check dev dependency; zero runtime deps
 npm run seed         # creates data/events.json + data/attendees.json with demo data
 npm start            # → http://localhost:3000
-npm test             # runs all API tests with node:test
+npm test             # runs 22 tests (16 API + 6 property-based) with node:test
 ```
 
 **Pages:**
@@ -104,7 +97,7 @@ npm test             # runs all API tests with node:test
 - **Pass codes:** `node:crypto` — `randomBytes(6).toString('base64url')`
 - **QR codes:** [qrcode.js](https://github.com/davidshimjs/qrcodejs) via CDN (client-side only)
 - **Frontend:** Vanilla HTML5 / CSS3 / ES modules — no framework, no bundler
-- **Tests:** `node:test` + `node:assert/strict`
+- **Tests:** `node:test` + `node:assert/strict` + `fast-check` (property-based, dev only)
 
 ---
 
@@ -130,7 +123,7 @@ Kiro used these files to guide every code-generation decision without being re-e
 | File | Purpose |
 |------|---------|
 | `.kiro/specs/meetup-checkin/requirements.md` | EARS-format user stories (US-1.1 through US-5.1) with explicit acceptance criteria — Kiro cross-checked each endpoint against these ACs |
-| `.kiro/specs/meetup-checkin/design.md` | Architecture overview, Mermaid sequence diagram, data model, full API table — served as the contract for `src/routes.js` |
+| `.kiro/specs/meetup-checkin/design.md` | Architecture overview, Mermaid sequence diagram, data model, full API table, and a **Correctness Properties** section defining six universal properties verified by property-based tests |
 | `.kiro/specs/meetup-checkin/tasks.md` | Phase-by-phase implementation checklist — Kiro ticked items off as each file was completed |
 
 The specs prevented scope creep and gave Kiro a concrete definition of "done".
@@ -154,19 +147,74 @@ These hooks demonstrate Kiro's ability to enforce team conventions automatically
 | `.kiro/settings/mcp.json` | `awslabs.aws-documentation-mcp-server@latest` (via `uvx`) | Lets Kiro search official AWS docs in-context — ready for the next step of deploying MeetupPass to AWS |
 | `.kiro/settings/mcp.json` | `mcp-server-fetch` (via `uvx`) | Lets Kiro read any public URL (library docs, CDN pages) without leaving the editor |
 
+The reviewer agent also has its own **agent-scoped** copy of the AWS documentation MCP server — see section 5 below.
+
 MCP lets Kiro consult live documentation instead of relying on potentially stale training data.
 
 ### 5. Custom Agent
-*A purpose-built agent with domain-specific review instructions.*
+*A purpose-built agent with domain-specific review instructions, scoped MCP access, and startup hooks.*
 
 | File | Role |
 |------|------|
-| `.kiro/agents/reviewer.json` | **Reviewer agent** — a senior Node.js engineer persona that reviews changes against the tech steering, spec ACs, API contract, test coverage and a security checklist, returning `APPROVED / NEEDS CHANGES / BLOCKED` with file:line comments. Run it with `kiro-cli chat --agent reviewer`. |
+| `.kiro/agents/reviewer.json` | **Reviewer agent** — a senior Node.js engineer persona that reviews changes against the tech steering, spec ACs, API contract, test coverage, property-based correctness properties, and a security checklist, returning `APPROVED / NEEDS CHANGES / BLOCKED` with file:line comments. Run with `kiro-cli chat --agent reviewer`. |
 
-### 6. Vibe / Chat Mode
+The reviewer agent is configured with three advanced features:
+
+**Agent-scoped MCP server:** `reviewer.json` declares its own `mcpServers` entry for `awslabs.aws-documentation-mcp-server@latest`. This means the reviewer can call `@aws-documentation` tools (search, read, fetch sections) to look up AWS SDK usage, IAM policy syntax, and service best practices inline during a review — without requiring a workspace-level MCP connection.
+
+**Pre-approved read-only MCP tools:** The `allowedTools` list includes `@aws-documentation/search_documentation`, `@aws-documentation/read_documentation`, and `@aws-documentation/read_sections` so the reviewer can use these tools without prompting for approval on every call.
+
+**agentSpawn hooks:** When the reviewer agent starts, two commands run automatically to prime its context:
+- `git status --short` — shows which files have been modified since the last commit
+- `npm test --silent 2>&1 | tail -6` — runs the full test suite and surfaces the pass/fail summary so the reviewer immediately knows the current test health
+
+### 6. Property-Based Testing (fast-check)
+*Universal correctness properties verified across hundreds of random inputs.*
+
+The `test/properties.test.js` file uses **[fast-check](https://fast-check.dev)** (installed as a devDependency) alongside the standard `node:test` runner to verify six properties defined in `.kiro/specs/meetup-checkin/design.md § Correctness Properties`. Each property runs with `numRuns: 100`, using the same temp-dir isolation pattern as `test/api.test.js`.
+
+| Property | What it verifies |
+|----------|-----------------|
+| **P1 — Pass code format + uniqueness** | All pass codes match `/^[A-Z0-9]{8}$/` and are pairwise distinct across any set of RSVPs |
+| **P2 — RSVP → Check-In round trip** | After check-in, exactly the right attendee is marked `checkedIn: true`; no other attendee changes |
+| **P3 — Check-in idempotency** | A second check-in with the same code always returns 409; `checkedInAt` is never overwritten |
+| **P4 — Dashboard invariants** | `0 ≤ totalCheckedIn ≤ totalRsvp ≤ capacity` and `remaining = capacity − totalCheckedIn` for any combination of RSVPs and check-ins |
+| **P5 — Unknown codes never change state** | Any unrecognised pass code returns 404 and leaves the attendee list byte-for-byte identical |
+| **P6 — CSV round-trip fidelity** | The export has exactly one row per attendee and correctly RFC 4180-quotes names/emails that contain commas or double-quote characters |
+
+The full test suite runs 22 tests: 16 API integration tests + 6 property tests.
+
+```bash
+npm test   # → 22 pass, 0 fail
+```
+
+fast-check found no bugs in this codebase — all six properties hold against the current implementation.
+
+### 7. Powers (Kiro Extensions)
+*Packaged skills and MCP configuration that can be shared and installed by anyone.*
+
+**Installed power — power-builder:** The `power-builder` power (installed from the Kiro registry) provides skills for authoring new powers to the [Agent Plugins v1.0.0 specification](https://agent-plugins.org/). Its guidance was used to structure `powers/meetuppass-events/`.
+
+**Packaged power — meetuppass-events:** This repo ships a ready-to-install Kiro power at `powers/meetuppass-events/` that packages the knowledge from this project so anyone can build or operate a community check-in app with Kiro's help.
+
+```bash
+kiro-cli powers install ./powers/meetuppass-events
+```
+
+The power contains:
+
+| File | Purpose |
+|------|---------|
+| `plugin.json` | Agent Plugins v1.0.0 manifest — name, keywords, author, schema ref |
+| `mcp.json` | Bundles `mcp-server-fetch` so the agent can read CDN/library docs inline |
+| `skills/build-meetup-checkin-app/SKILL.md` | Step-by-step guide: persistence layer, route handlers, frontend, tests, steering docs |
+| `skills/build-meetup-checkin-app/references/steering-templates.md` | Copy-paste-ready `.kiro/steering/` starter files |
+| `skills/run-meetup-checkin-app/SKILL.md` | Operations guide: start, seed, test, export CSV, event-day checklist, troubleshooting |
+
+### 8. Vibe / Chat Mode
 The whole build was driven from a single natural-language prompt in `kiro-cli chat`: Kiro turned it into steering docs, a spec and a task list, then implemented the tasks. When the first session was throttled mid-build, `kiro-cli chat --resume` picked up the same conversation and finished the remaining tasks.
 
-### 7. Autopilot / Autonomous Mode
+### 9. Autopilot / Autonomous Mode
 Kiro autonomously:
 - Read all existing files before writing any new code
 - Created `public/checkin.html`, `public/dashboard.html`, `scripts/seed.js`, `test/api.test.js`, and `README.md` without step-by-step prompting
@@ -180,26 +228,38 @@ Kiro autonomously:
 ```
 meetuppass/
 ├── .kiro/
-│   ├── steering/          # product.md · tech.md · structure.md · testing.md
-│   ├── specs/meetup-checkin/   # requirements.md · design.md · tasks.md
-│   ├── hooks/             # test-on-save · readme-sync · secret-scan
-│   ├── settings/mcp.json  # AWS docs + fetch MCP servers
-│   └── agents/reviewer.json
+│   ├── steering/               # product.md · tech.md · structure.md · testing.md
+│   ├── specs/meetup-checkin/   # requirements.md · design.md (+ Correctness Properties) · tasks.md
+│   ├── hooks/                  # test-on-save · readme-sync · secret-scan
+│   ├── settings/mcp.json       # workspace-level AWS docs + fetch MCP servers
+│   └── agents/reviewer.json    # reviewer agent with scoped MCP + agentSpawn hooks
 ├── src/
-│   ├── server.js          # node:http entry point
-│   ├── routes.js          # API route handlers + static file serving
-│   └── db.js              # JSON file persistence layer
+│   ├── server.js               # node:http entry point
+│   ├── routes.js               # API route handlers + static file serving
+│   └── db.js                   # JSON file persistence layer
 ├── public/
-│   ├── index.html         # Event list + create form
-│   ├── rsvp.html          # RSVP form + QR pass
-│   ├── checkin.html       # Check-in desk
-│   ├── dashboard.html     # Live dashboard + CSV export
-│   ├── style.css          # Shared styles (CSS custom properties)
-│   └── app.js             # Shared client utilities
-├── scripts/seed.js        # Demo event + 22 attendees, ~1/3 checked in
-├── test/api.test.js       # node:test integration tests
-├── data/.gitkeep          # JSON files ignored; directory kept in git
-└── package.json           # type: module; scripts: start, seed, test
+│   ├── index.html              # Event list + create form
+│   ├── rsvp.html               # RSVP form + QR pass
+│   ├── checkin.html            # Check-in desk
+│   ├── dashboard.html          # Live dashboard + CSV export
+│   ├── style.css               # Shared styles (CSS custom properties)
+│   └── app.js                  # Shared client utilities
+├── powers/
+│   └── meetuppass-events/      # Installable Kiro power (Agent Plugins v1.0.0)
+│       ├── plugin.json
+│       ├── mcp.json
+│       ├── skills/
+│       │   ├── build-meetup-checkin-app/SKILL.md
+│       │   └── run-meetup-checkin-app/SKILL.md
+│       └── README.md
+├── docs/
+│   └── screenshots/            # home · rsvp-pass · checkin-success · checkin-duplicate · dashboard
+├── scripts/seed.js             # Demo event + 22 attendees, ~1/3 checked in
+├── test/
+│   ├── api.test.js             # 16 node:test integration tests
+│   └── properties.test.js      # 6 fast-check property tests (100 runs each)
+├── data/.gitkeep               # JSON files ignored; directory kept in git
+└── package.json                # type: module; devDeps: fast-check; scripts: start, seed, test
 ```
 
 ---

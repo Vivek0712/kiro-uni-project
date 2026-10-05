@@ -10,9 +10,12 @@
   "scripts": {
     "start": "node src/server.js",
     "seed": "node scripts/seed.js",
-    "test": "node --test test/api.test.js"
+    "test": "node --test test/api.test.js test/properties.test.js"
   },
   "keywords": ["meetup", "checkin", "events", "aws-user-group"],
   "author": "AWS User Group Madurai",
-  "license": "MIT"
+  "license": "MIT",
+  "devDependencies": {
+    "fast-check": "3.22.0"
+  }
 }

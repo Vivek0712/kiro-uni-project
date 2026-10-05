@@ -44,3 +44,14 @@
 - [x] `npm run seed` — creates data/events.json + data/attendees.json, prints confirmation
 - [x] `npm test` — 16/16 tests pass (exit code 0)
 - [x] `npm start` → server responds HTTP 200 on http://localhost:3000
+
+## Phase 8: Property-Based Testing (fast-check)
+- [x] Add `fast-check` as devDependency in `package.json`
+- [x] Update `package.json` `test` script to run both `test/api.test.js` and `test/properties.test.js`
+- [x] Create `test/properties.test.js` with `numRuns >= 100` per property, same temp-dir isolation as `test/api.test.js`
+  - [x] Property 1: Pass code format + uniqueness (`/^[A-Z0-9]{8}$/`, all distinct) — see design.md § Property 1
+  - [x] Property 2: RSVP → Check-In round trip marks exactly that attendee — see design.md § Property 2
+  - [x] Property 3: Check-in idempotency — second check-in → 409, state unchanged — see design.md § Property 3
+  - [x] Property 4: Dashboard invariants (`totalCheckedIn ≤ totalRsvp ≤ capacity`) — see design.md § Property 4
+  - [x] Property 5: Unknown pass codes → 404, state unchanged — see design.md § Property 5
+  - [x] Property 6: CSV export has exactly one row per attendee and round-trips names/emails with commas and quotes — see design.md § Property 6
