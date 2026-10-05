@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>RSVP — MeetupPass</title>
+  <link rel="stylesheet" href="/style.css" />
+  <!-- QRCode.js from CDN (no npm dependency) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+</head>
+<body>
+
+<nav class="nav">
+  <a class="nav-logo" href="/">Meetup<span>Pass</span></a>
+  <div class="nav-links">
+    <a href="/">Events</a>
+    <a href="/checkin.html">Check-In</a>
+    <a href="/dashboard.html">Dashboard</a>
+  </div>
+</nav>
+
+<div class="container-sm">
+
+  <!-- Event info header -->
+  <div id="event-header" class="page-header mt-3">
+    <h1 id="event-title">Loading…</h1>
+    <p id="event-meta" class="text-muted"></p>
+  </div>
+
+  <!-- RSVP Form (shown before submission) -->
+  <div id="rsvp-section" class="card hidden">
+    <div class="card-title">RSVP for This Event</div>
+    <form id="rsvp-form">
+      <div class="form-group">
+        <label for="rsvp-name">Full Name</label>
+        <input id="rsvp-name" type="text" placeholder="Arun Kumar" required autocomplete="name" />
+      </div>
+      <div class="form-group">
+        <label for="rsvp-email">Email Address</label>
+        <input id="rsvp-email" type="email" placeholder="arun@example.com" required autocomplete="email" />
+      </div>
+      <button type="submit" class="btn btn-primary btn-block">Get My Pass →</button>
+    </form>
+  </div>
+
+  <!-- Pass display (shown after successful RSVP) -->
+  <div id="pass-section" class="card pass-card hidden">
+    <div class="pass-title">🎟 Your MeetupPass</div>
+    <p class="pass-subtitle" id="pass-event-name"></p>
+    <div id="qrcode"></div>
+    <div class="pass-code" id="pass-code-display"></div>
+    <p class="pass-hint">Show this QR code or enter the 8-character code at the check-in desk.</p>
+    <div style="display:flex;gap:0.75rem;justify-content:center;flex-wrap:wrap;">
+      <button class="btn btn-primary" id="download-btn">⬇ Download Pass</button>
+      <a class="btn btn-outline" href="/">← Back to Events</a>
+    </div>
+  </div>
+
+  <!-- Error / already-registered section -->
+  <div id="error-section" class="card hidden" style="text-align:center;padding:2rem;">
+    <div style="font-size:2.5rem;margin-bottom:0.75rem;">⚠️</div>
+    <h3 id="error-title" style="margin-bottom:0.5rem;">Something went wrong</h3>
+    <p id="error-message" class="text-muted mb-2"></p>
+    <div id="error-pass-wrap" class="hidden">
+      <p class="text-muted mb-1">Your existing pass code:</p>
+      <div class="pass-code" id="error-pass-code"></div>
+    </div>
+    <a class="btn btn-outline mt-2" href="/">← Back to Events</a>
+  </div>
+
+</div>
+
+<script type="module">
+  import { api, getParam, fmtDate, toast } from '/app.js';
+
+  const eventId = getParam('eventId');
+
+  async function loadEvent() {
+    if (!eventId) {
+      showError('No event selected', 'Please go back and choose an event.');
+      return;
+    }
+    try {
+      const event = await api(`/api/events/${eventId}`);
+      document.getElementById('event-title').textContent = event.name;
+      document.getElementById('event-meta').textContent =
+        `📅 ${fmtDate(event.date)}  ·  📍 ${event.venue}  ·  👥 Capacity: ${event.capacity}`;
+      document.getElementById('rsvp-section').classList.remove('hidden');
+    } catch (e) {
+      showError('Event not found', 'This event does not exist or has been removed.');
+    }
+  }
+
+  function showError(title, message, passCode = null) {
+    document.getElementById('rsvp-section').classList.add('hidden');
+    document.getElementById('pass-section').classList.add('hidden');
+    document.getElementById('error-title').textContent = title;
+    document.getElementById('error-message').textContent = message;
+    if (passCode) {
+      document.getElementById('error-pass-wrap').classList.remove('hidden');
+      document.getElementById('error-pass-code').textContent = passCode;
+    }
+    document.getElementById('error-section').classList.remove('hidden');
+  }
+
+  function showPass(passCode, eventName) {
+    document.getElementById('rsvp-section').classList.add('hidden');
+    document.getElementById('pass-event-name').textContent = eventName;
+    document.getElementById('pass-code-display').textContent = passCode;
+
+    // Render QR code
+    const qrEl = document.getElementById('qrcode');
+    qrEl.innerHTML = '';
+    new QRCode(qrEl, {
+      text: passCode,
+      width: 180,
+      height: 180,
+      colorDark: '#232F3E',
+      colorLight: '#ffffff',
+      correctLevel: QRCode.CorrectLevel.H,
+    });
+
+    document.getElementById('pass-section').classList.remove('hidden');
+
+    // Download button
+    document.getElementById('download-btn').onclick = () => {
+      const canvas = qrEl.querySelector('canvas');
+      if (!canvas) { toast('QR not ready yet', 'error'); return; }
+      const link = document.createElement('a');
+      link.download = `meetuppass-${passCode}.png`;
+      link.href = canvas.toDataURL('image/png');
+      link.click();
+    };
+  }
+
+  document.getElementById('rsvp-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const btn = e.target.querySelector('[type=submit]');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span> Registering…';
+
+    const name  = document.getElementById('rsvp-name').value.trim();
+    const email = document.getElementById('rsvp-email').value.trim();
+
+    try {
+      const result = await api('/api/rsvp', { method: 'POST', body: { eventId, name, email } });
+      showPass(result.passCode, result.eventName);
+    } catch (err) {
+      if (err.status === 409) {
+        showError(
+          'Already Registered',
+          'This email is already registered for the event. Here is your existing pass:',
+          err.data.passCode,
+        );
+      } else {
+        toast(err.message, 'error');
+        btn.disabled = false;
+        btn.textContent = 'Get My Pass →';
+      }
+    }
+  });
+
+  loadEvent();
+</script>
+</body>
+</html>

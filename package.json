@@ -1,0 +1,18 @@
+{
+  "name": "meetuppass",
+  "version": "1.0.0",
+  "description": "Event check-in web app for AWS User Group Madurai meetups",
+  "main": "src/server.js",
+  "type": "module",
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "scripts": {
+    "start": "node src/server.js",
+    "seed": "node scripts/seed.js",
+    "test": "node --test test/api.test.js"
+  },
+  "keywords": ["meetup", "checkin", "events", "aws-user-group"],
+  "author": "AWS User Group Madurai",
+  "license": "MIT"
+}

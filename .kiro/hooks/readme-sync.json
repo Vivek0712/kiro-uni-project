@@ -1,0 +1,15 @@
+{
+  "version": "v1",
+  "hooks": [
+    {
+      "name": "Sync README API Table",
+      "description": "When src/routes.js is edited, reminds the agent to update the API reference table in README.md to stay in sync with the actual implementation.",
+      "trigger": "FileEdited",
+      "matcher": "src/routes\\.js$",
+      "action": {
+        "type": "prompt",
+        "prompt": "src/routes.js was just modified. Review the API endpoints defined in that file and update the API Reference table in README.md so the documentation stays in sync with the implementation. Only update the table rows — do not change other sections of the README."
+      }
+    }
+  ]
+}

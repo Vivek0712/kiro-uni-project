@@ -1,0 +1,17 @@
+{
+  "mcpServers": {
+    "aws-documentation": {
+      "command": "uvx",
+      "args": ["awslabs.aws-documentation-mcp-server@latest"],
+      "env": {
+        "FASTMCP_LOG_LEVEL": "ERROR"
+      },
+      "description": "AWS Documentation MCP server — search and retrieve AWS docs directly in Kiro. Useful for looking up AWS SDK usage, IAM policies, and service-specific best practices while building MeetupPass."
+    },
+    "fetch": {
+      "command": "uvx",
+      "args": ["mcp-server-fetch"],
+      "description": "General-purpose HTTP fetch MCP server — retrieve any public URL content. Used for checking QR code library CDN endpoints and reading API documentation."
+    }
+  }
+}

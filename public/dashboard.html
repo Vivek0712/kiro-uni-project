@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Dashboard — MeetupPass</title>
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+
+<nav class="nav">
+  <a class="nav-logo" href="/">Meetup<span>Pass</span></a>
+  <div class="nav-links">
+    <a href="/">Events</a>
+    <a href="/checkin.html">Check-In</a>
+    <a href="/dashboard.html">Dashboard</a>
+  </div>
+</nav>
+
+<div class="container">
+
+  <!-- Event selector (shown when no ?eventId param) -->
+  <div id="event-selector" class="card mt-3 hidden">
+    <div class="card-title">Select Event to Monitor</div>
+    <div style="display:flex;gap:0.75rem;align-items:flex-end;flex-wrap:wrap;">
+      <div class="form-group" style="flex:1;min-width:200px;margin:0;">
+        <label for="event-select">Event</label>
+        <select id="event-select">
+          <option value="">— choose an event —</option>
+        </select>
+      </div>
+      <button class="btn btn-secondary" id="select-btn">View Dashboard</button>
+    </div>
+  </div>
+
+  <!-- Dashboard content -->
+  <div id="dashboard" class="hidden">
+
+    <!-- Header row -->
+    <div class="flex-between mt-3" style="flex-wrap:wrap;gap:1rem;margin-bottom:1.5rem;">
+      <div>
+        <h1 id="event-title" style="font-size:1.6rem;font-weight:800;color:var(--secondary);"></h1>
+        <p id="event-meta" class="text-muted"></p>
+      </div>
+      <div style="display:flex;gap:0.5rem;flex-wrap:wrap;align-items:center;">
+        <span class="badge badge-success">● LIVE<span class="refresh-dot"></span></span>
+        <a id="export-btn" href="#" class="btn btn-outline btn-sm" target="_blank">⬇ Export CSV</a>
+        <a href="/" class="btn btn-outline btn-sm">← Events</a>
+      </div>
+    </div>
+
+    <!-- Stat cards -->
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-number" id="stat-rsvp">—</div>
+        <div class="stat-label">Total RSVPs</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-number" id="stat-checked" style="color:var(--success);">—</div>
+        <div class="stat-label">Checked In</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-number" id="stat-remaining">—</div>
+        <div class="stat-label">Seats Remaining</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-number" id="stat-capacity">—</div>
+        <div class="stat-label">Total Capacity</div>
+      </div>
+    </div>
+
+    <!-- Capacity progress bar -->
+    <div class="card" style="padding:1.25rem;">
+      <div class="flex-between mb-1">
+        <div style="font-weight:600;font-size:0.9rem;">Capacity Used</div>
+        <div class="text-muted" style="font-size:0.85rem;" id="capacity-label">0 / 0</div>
+      </div>
+      <div class="progress-wrap">
+        <div class="progress-bar" id="capacity-bar" style="width:0%;"></div>
+      </div>
+    </div>
+
+    <!-- Two-column layout -->
+    <div style="display:grid;grid-template-columns:minmax(220px,1fr) 1.8fr;gap:1rem;margin-top:1rem;">
+
+      <!-- Recent check-ins -->
+      <div class="card" style="align-self:start;">
+        <div class="card-title">Recent Check-Ins</div>
+        <ul id="recent-list" class="checkin-feed">
+          <li style="color:var(--text-muted);font-size:0.85rem;background:none;border:none;">No check-ins yet.</li>
+        </ul>
+      </div>
+
+      <!-- Attendees table -->
+      <div class="card" style="overflow:hidden;">
+        <div class="flex-between mb-2">
+          <div class="card-title" style="margin:0;">All Attendees</div>
+          <span id="attendee-count" class="badge badge-neutral"></span>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Email</th>
+                <th>Status</th>
+                <th>Checked In At</th>
+              </tr>
+            </thead>
+            <tbody id="attendees-tbody">
+              <tr><td colspan="4" class="text-muted">Loading…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </div>
+  </div><!-- /#dashboard -->
+
+</div>
+
+<script type="module">
+  import { api, getParam, fmtDate, fmtDateTime, initials, toast } from '/app.js';
+
+  let currentEventId = getParam('eventId');
+  let refreshTimer;
+
+  // ── Initialise ──────────────────────────────────────────────────
+  async function init() {
+    if (currentEventId) {
+      await loadDashboard();
+    } else {
+      await showSelector();
+    }
+  }
+
+  async function showSelector() {
+    const card = document.getElementById('event-selector');
+    card.classList.remove('hidden');
+    try {
+      const events = await api('/api/events');
+      const sel = document.getElementById('event-select');
+      events.forEach(e => {
+        const opt = document.createElement('option');
+        opt.value = e.id;
+        opt.textContent = `${e.name} — ${fmtDate(e.date)}`;
+        sel.appendChild(opt);
+      });
+    } catch (e) { toast('Could not load events', 'error'); }
+  }
+
+  document.getElementById('select-btn').addEventListener('click', async () => {
+    const id = document.getElementById('event-select').value;
+    if (!id) { toast('Please select an event', 'error'); return; }
+    currentEventId = id;
+    document.getElementById('event-selector').classList.add('hidden');
+    await loadDashboard();
+  });
+
+  // ── Load + render ───────────────────────────────────────────────
+  async function loadDashboard() {
+    await refresh();
+    document.getElementById('export-btn').href = `/api/export/${currentEventId}`;
+    document.getElementById('dashboard').classList.remove('hidden');
+    if (refreshTimer) clearInterval(refreshTimer);
+    refreshTimer = setInterval(refresh, 5000);
+  }
+
+  async function refresh() {
+    try {
+      const [stats, attendees] = await Promise.all([
+        api(`/api/dashboard/${currentEventId}`),
+        api(`/api/attendees/${currentEventId}`),
+      ]);
+      renderStats(stats);
+      renderAttendees(attendees);
+      renderRecent(stats.recentCheckIns);
+    } catch (e) { /* silently retry */ }
+  }
+
+  function renderStats({ event, totalRsvp, totalCheckedIn, remaining }) {
+    document.getElementById('event-title').textContent = event.name;
+    document.getElementById('event-meta').textContent =
+      `📅 ${fmtDate(event.date)}  ·  📍 ${event.venue}`;
+    document.getElementById('stat-rsvp').textContent      = totalRsvp;
+    document.getElementById('stat-checked').textContent   = totalCheckedIn;
+    document.getElementById('stat-remaining').textContent = remaining;
+    document.getElementById('stat-capacity').textContent  = event.capacity;
+
+    const pct = event.capacity > 0
+      ? Math.min(100, Math.round(totalCheckedIn / event.capacity * 100))
+      : 0;
+    const bar = document.getElementById('capacity-bar');
+    bar.style.width = pct + '%';
+    bar.className = 'progress-bar' + (pct >= 90 ? ' danger' : '');
+    document.getElementById('capacity-label').textContent =
+      `${totalCheckedIn} / ${event.capacity} (${pct}%)`;
+  }
+
+  function renderRecent(recentCheckIns) {
+    const el = document.getElementById('recent-list');
+    if (!recentCheckIns || recentCheckIns.length === 0) {
+      el.innerHTML = '<li style="color:var(--text-muted);font-size:0.85rem;background:none;border:none;">No check-ins yet.</li>';
+      return;
+    }
+    el.innerHTML = recentCheckIns.map(a => `
+      <li>
+        <div class="checkin-avatar">${initials(a.name)}</div>
+        <div>
+          <div class="checkin-feed-name">${esc(a.name)}</div>
+          <div class="checkin-feed-time">${fmtDateTime(a.checkedInAt)}</div>
+        </div>
+      </li>`).join('');
+  }
+
+  function renderAttendees(attendees) {
+    const tbody = document.getElementById('attendees-tbody');
+    document.getElementById('attendee-count').textContent = `${attendees.length} registered`;
+    if (attendees.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="4" class="text-muted">No attendees yet.</td></tr>';
+      return;
+    }
+    // Sort: checked-in first, then alphabetical
+    const sorted = [...attendees].sort((a, b) => {
+      if (a.checkedIn && !b.checkedIn) return -1;
+      if (!a.checkedIn && b.checkedIn) return 1;
+      return a.name.localeCompare(b.name);
+    });
+    tbody.innerHTML = sorted.map(a => `
+      <tr>
+        <td style="font-weight:600;">${esc(a.name)}</td>
+        <td class="text-muted" style="font-size:0.85rem;">${esc(a.email)}</td>
+        <td>${a.checkedIn
+          ? '<span class="badge badge-success">✓ Checked In</span>'
+          : '<span class="badge badge-neutral">RSVP\'d</span>'}</td>
+        <td class="text-muted" style="font-size:0.8rem;">${fmtDateTime(a.checkedInAt)}</td>
+      </tr>`).join('');
+  }
+
+  function esc(s) {
+    const d = document.createElement('div');
+    d.textContent = s || '';
+    return d.innerHTML;
+  }
+
+  init();
+</script>
+</body>
+</html>

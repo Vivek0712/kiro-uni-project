@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Check-In Desk — MeetupPass</title>
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+
+<nav class="nav">
+  <a class="nav-logo" href="/">Meetup<span>Pass</span></a>
+  <div class="nav-links">
+    <a href="/">Events</a>
+    <a href="/checkin.html">Check-In</a>
+    <a href="/dashboard.html">Dashboard</a>
+  </div>
+</nav>
+
+<div class="container-sm">
+
+  <!-- Page header -->
+  <div class="page-header mt-3">
+    <h1>🎟 Check-In Desk</h1>
+    <p id="event-meta" class="text-muted">Enter a pass code to check in an attendee.</p>
+  </div>
+
+  <!-- Event selector (shown when no eventId in query string) -->
+  <div id="event-selector" class="card mb-2 hidden">
+    <div class="card-title">Select Event</div>
+    <div class="form-group">
+      <label for="event-select">Event</label>
+      <select id="event-select">
+        <option value="">— choose an event —</option>
+      </select>
+    </div>
+    <button class="btn btn-primary" id="select-event-btn">Go to Check-In</button>
+  </div>
+
+  <!-- Check-in form -->
+  <div id="checkin-section" class="card hidden">
+    <div class="card-title" id="event-name-title">Check-In</div>
+
+    <form id="checkin-form">
+      <div class="form-group">
+        <label for="pass-input">Pass Code</label>
+        <div class="checkin-input-wrap">
+          <input
+            id="pass-input"
+            type="text"
+            maxlength="8"
+            placeholder="A1B2C3D4"
+            autocomplete="off"
+            autocorrect="off"
+            spellcheck="false"
+            required
+          />
+          <button type="submit" class="btn btn-primary" id="checkin-btn">Check In</button>
+        </div>
+        <p style="font-size:0.8rem;color:var(--text-muted);margin-top:0.4rem;">
+          Type the 8-character code on the attendee's pass or scan their QR code.
+        </p>
+      </div>
+    </form>
+
+    <!-- Result banner -->
+    <div id="result-banner" class="result-banner">
+      <h3 id="result-title"></h3>
+      <p id="result-message"></p>
+      <p id="result-detail" class="mt-1" style="font-size:0.85rem;opacity:0.85;"></p>
+    </div>
+  </div>
+
+  <!-- Recent check-ins for this session -->
+  <div id="recent-section" class="card mt-2 hidden">
+    <div class="flex-between mb-2">
+      <div class="card-title" style="margin-bottom:0;">Recent Check-Ins (this session)</div>
+      <span id="session-count" class="badge badge-success">0 checked in</span>
+    </div>
+    <ul id="recent-list" class="checkin-feed"></ul>
+  </div>
+
+</div>
+
+<script type="module">
+  import { api, getParam, fmtDate, fmtDateTime, toast, initials } from '/app.js';
+
+  let eventId = getParam('eventId');
+  let sessionCount = 0;
+
+  // ── Load event or show selector ────────────────────────────────────────────
+  async function init() {
+    if (!eventId) {
+      // No eventId in URL — show the event selector dropdown
+      const selector = document.getElementById('event-selector');
+      selector.classList.remove('hidden');
+      try {
+        const events = await api('/api/events');
+        const sel = document.getElementById('event-select');
+        events.forEach(e => {
+          const opt = document.createElement('option');
+          opt.value = e.id;
+          opt.textContent = `${e.name} — ${fmtDate(e.date)}`;
+          sel.appendChild(opt);
+        });
+      } catch (err) {
+        toast('Could not load events: ' + err.message, 'error');
+      }
+
+      document.getElementById('select-event-btn').addEventListener('click', () => {
+        const sel = document.getElementById('event-select');
+        if (!sel.value) { toast('Please choose an event', 'error'); return; }
+        window.location.href = `/checkin.html?eventId=${sel.value}`;
+      });
+      return;
+    }
+
+    // We have an eventId — load it and show the check-in form
+    try {
+      const event = await api(`/api/events/${eventId}`);
+      document.title = `Check-In — ${event.name}`;
+      document.getElementById('event-meta').textContent =
+        `📅 ${fmtDate(event.date)}  ·  📍 ${event.venue}`;
+      document.getElementById('event-name-title').textContent = event.name;
+    } catch (err) {
+      document.getElementById('event-meta').textContent = 'Event not found.';
+      toast('Event not found', 'error');
+    }
+
+    document.getElementById('checkin-section').classList.remove('hidden');
+    document.getElementById('pass-input').focus();
+  }
+
+  // ── Handle form submit ─────────────────────────────────────────────────────
+  document.getElementById('checkin-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const input = document.getElementById('pass-input');
+    const btn = document.getElementById('checkin-btn');
+    const passCode = input.value.trim().toUpperCase();
+
+    if (!passCode) return;
+
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span>';
+
+    try {
+      const result = await api('/api/checkin', {
+        method: 'POST',
+        body: { passCode },
+      });
+      showResult('success', '✅ Checked In!', result.attendee.name, result.eventName || '');
+      addToFeed(result.attendee.name, result.attendee.email, result.attendee.checkedInAt);
+      sessionCount++;
+      document.getElementById('session-count').textContent = `${sessionCount} checked in`;
+      input.value = '';
+    } catch (err) {
+      if (err.status === 409) {
+        const t = err.data.checkedInAt ? `Originally checked in at ${fmtDateTime(err.data.checkedInAt)}` : '';
+        showResult('error', '⛔ Already Checked In', err.data.attendee?.name || '', t);
+      } else if (err.status === 404) {
+        showResult('error', '❌ Pass Code Not Found', 'This code is not registered for any event.', '');
+      } else {
+        showResult('error', '⚠️ Error', err.message, '');
+      }
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Check In';
+      input.focus();
+    }
+  });
+
+  // ── Auto-uppercase input ───────────────────────────────────────────────────
+  document.getElementById('pass-input').addEventListener('input', function () {
+    this.value = this.value.toUpperCase();
+  });
+
+  // ── Helpers ───────────────────────────────────────────────────────────────
+  function showResult(type, title, message, detail) {
+    const banner = document.getElementById('result-banner');
+    banner.className = `result-banner ${type}`;
+    document.getElementById('result-title').textContent = title;
+    document.getElementById('result-message').textContent = message;
+    document.getElementById('result-detail').textContent = detail || '';
+    banner.style.display = 'block';
+    // Auto-clear after 6 seconds
+    clearTimeout(banner._timer);
+    banner._timer = setTimeout(() => { banner.style.display = 'none'; }, 6000);
+  }
+
+  function addToFeed(name, email, time) {
+    const section = document.getElementById('recent-section');
+    section.classList.remove('hidden');
+    const list = document.getElementById('recent-list');
+    const li = document.createElement('li');
+    li.innerHTML = `
+      <div class="checkin-avatar">${initials(name)}</div>
+      <div style="flex:1;min-width:0;">
+        <div class="checkin-feed-name">${esc(name)}</div>
+        <div class="checkin-feed-time">${esc(email)}</div>
+      </div>
+      <div class="checkin-feed-time">${fmtDateTime(time)}</div>
+    `;
+    list.prepend(li);
+    // Keep max 8 items in the feed
+    while (list.children.length > 8) list.removeChild(list.lastChild);
+  }
+
+  function esc(s) {
+    const d = document.createElement('div');
+    d.textContent = s || '';
+    return d.innerHTML;
+  }
+
+  init();
+</script>
+</body>
+</html>

@@ -1,0 +1,16 @@
+{
+  "version": "v1",
+  "hooks": [
+    {
+      "name": "Run Tests on Source Change",
+      "description": "Automatically runs the test suite whenever a src/*.js file is saved, ensuring regressions are caught immediately.",
+      "trigger": "FileEdited",
+      "matcher": "src/.*\\.js$",
+      "action": {
+        "type": "command",
+        "command": "npm test",
+        "timeout": 60
+      }
+    }
+  ]
+}
