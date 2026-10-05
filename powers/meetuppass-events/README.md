@@ -67,3 +67,10 @@ powers/meetuppass-events/
 ## License
 
 MIT — AWS User Group Madurai
+
+## Note on the bundled `awsugmdu` MCP server
+
+`mcp.json` starts the server with `node mcp/awsugmdu-mcp-server.js`, a path relative to the
+MeetupPass repo root. It works when Kiro runs inside this repository; to use it from another
+project, clone this repo and change the path in `mcp.json` to the absolute location of
+`mcp/awsugmdu-mcp-server.js`.
