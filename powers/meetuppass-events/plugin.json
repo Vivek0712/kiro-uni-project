@@ -1,8 +1,8 @@
 {
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "meetuppass-events",
-  "version": "1.0.0",
-  "description": "Build and run community meetup check-in apps: event creation, RSVP with QR pass codes, door check-in, and live dashboard. Distilled from MeetupPass (AWS User Group Madurai). Zero npm runtime dependencies \u2014 pure Node.js 20+ built-ins.",
+  "version": "1.1.0",
+  "description": "Build and run community meetup check-in apps: event creation, RSVP with QR pass codes, door check-in, live dashboard, community points, and awsugmdu.in platform integration. Distilled from MeetupPass (AWS User Group Madurai). Zero npm runtime dependencies — pure Node.js 20+ built-ins.",
   "author": {
     "name": "Vivek Raja (AWS User Group Madurai)",
     "url": "https://github.com/Vivek0712"
@@ -15,7 +15,11 @@
     "community",
     "qr-code",
     "node",
-    "no-framework"
+    "no-framework",
+    "aws-user-group",
+    "awsugmdu",
+    "platform-integration",
+    "mcp"
   ],
   "license": "MIT",
   "repository": "https://github.com/Vivek0712/kiro-uni-project/tree/main/powers/meetuppass-events"

@@ -19,6 +19,19 @@ MeetupPass is a lightweight, zero-dependency event check-in web application buil
 - Multi-organizer / role-based access control.
 - Email/SMS notifications.
 - Persistent cloud database (JSON file storage is intentional for simplicity).
+- Writing data back to the awsugmdu.in platform (read-only integration).
+
+## Privacy Rule — Platform Integration (MANDATORY)
+
+The awsugmdu.in platform API responses contain PII: emails, phone-like data, and user IDs embedded in `hosts`, `speakers`, `volunteers`, `registeredUsers`, and `attendedUsers` fields.
+
+**The system MUST:**
+1. Pass every platform API response through `sanitizeMeetup()` in `src/platform.js` before any storage, logging, rendering, or API response.
+2. Keep only these fields from platform meetup objects: `id`, `title`, `date`, `time`, `duration`, `type`, `status`, `maxAttendees`, `attendees` (count), `image`, `meetupUrl`, `hostPoints`, `speakerPoints`, `volunteerPoints`.
+3. Never store, log, render, commit, or return: `email`, `userId`, `phone`, `registeredUsers`, `attendedUsers`, `hosts`, `speakers`, `volunteers`, or any unlisted field.
+4. Apply this rule in both the HTTP API layer and the MCP server layer.
+
+This rule exists to protect community members' personal information. Violations must be caught by the `privacy-guard` hook and the property-based sanitizer test.
 
 ## Success Metrics
 - RSVP → check-in flow completed in < 30 seconds per attendee.

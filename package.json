@@ -10,7 +10,7 @@
   "scripts": {
     "start": "node src/server.js",
     "seed": "node scripts/seed.js",
-    "test": "node --test test/api.test.js test/properties.test.js"
+    "test": "node --test test/api.test.js test/properties.test.js test/platform.test.js test/platform-properties.test.js"
   },
   "keywords": ["meetup", "checkin", "events", "aws-user-group"],
   "author": "AWS User Group Madurai",

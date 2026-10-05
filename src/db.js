@@ -92,8 +92,31 @@ export async function getEvent(id) {
 }
 
 /**
+ * Find a single event by platformMeetupId.
+ * Used by the import endpoint to detect duplicates.
+ * @param {string} platformMeetupId
+ * @returns {Promise<Event|null>}
+ */
+export async function getEventByPlatformId(platformMeetupId) {
+  const events = await readJSON(EVENTS_FILE);
+  return events.find(e => e.platformMeetupId === platformMeetupId) || null;
+}
+
+/**
  * Create a new event.
- * @param {{ name: string, date: string, venue: string, capacity: number }} data
+ * Supports optional platform-linked fields: platformMeetupId, type, image, meetupUrl, attendeePoints.
+ *
+ * @param {{
+ *   name: string,
+ *   date: string,
+ *   venue: string,
+ *   capacity: number,
+ *   platformMeetupId?: string,
+ *   type?: string,
+ *   image?: string,
+ *   meetupUrl?: string,
+ *   attendeePoints?: number
+ * }} data
  * @returns {Promise<Event>}
  */
 export async function createEvent(data) {
@@ -105,6 +128,15 @@ export async function createEvent(data) {
     venue: data.venue,
     capacity: Number(data.capacity),
     createdAt: new Date().toISOString(),
+    // Optional platform-linked fields (only set if provided)
+    ...(data.platformMeetupId !== undefined && { platformMeetupId: data.platformMeetupId }),
+    ...(data.type !== undefined && { type: data.type }),
+    ...(data.image !== undefined && { image: data.image }),
+    ...(data.meetupUrl !== undefined && { meetupUrl: data.meetupUrl }),
+    // attendeePoints defaults to 10 if this is a platform-linked event, 0 otherwise
+    attendeePoints: data.attendeePoints !== undefined
+      ? Number(data.attendeePoints)
+      : (data.platformMeetupId ? 10 : 0),
   };
   events.push(event);
   await writeJSON(EVENTS_FILE, events);
@@ -163,6 +195,7 @@ export async function createAttendee(data) {
     rsvpAt: new Date().toISOString(),
     checkedIn: false,
     checkedInAt: null,
+    pointsAwarded: null,
   };
   attendees.push(attendee);
   await writeJSON(ATTENDEES_FILE, attendees);
@@ -170,16 +203,26 @@ export async function createAttendee(data) {
 }
 
 /**
- * Mark an attendee as checked in.
+ * Mark an attendee as checked in and record points awarded from the event.
+ * Points are set from the event's attendeePoints field (default 0).
+ *
  * @param {string} passCode
- * @returns {Promise<Attendee>}
+ * @returns {Promise<Attendee|null>}
  */
 export async function checkInAttendee(passCode) {
   const attendees = await readJSON(ATTENDEES_FILE);
   const idx = attendees.findIndex(a => a.passCode === passCode.toUpperCase());
   if (idx === -1) return null;
+
   attendees[idx].checkedIn = true;
   attendees[idx].checkedInAt = new Date().toISOString();
+
+  // Look up the event to get attendeePoints (read directly to avoid circular deps)
+  const events = await readJSON(EVENTS_FILE);
+  const event = events.find(e => e.id === attendees[idx].eventId);
+  const pts = event && event.attendeePoints ? Number(event.attendeePoints) : 0;
+  attendees[idx].pointsAwarded = pts > 0 ? pts : null;
+
   await writeJSON(ATTENDEES_FILE, attendees);
   return attendees[idx];
 }

@@ -6,6 +6,13 @@
       "command": "uvx",
       "args": ["mcp-server-fetch"],
       "env": {}
+    },
+    "awsugmdu": {
+      "type": "stdio",
+      "command": "node",
+      "args": ["mcp/awsugmdu-mcp-server.js"],
+      "env": {},
+      "description": "awsugmdu.in platform MCP server — list and retrieve AWS User Group Madurai meetups and community stats. All data is PII-sanitized."
     }
   }
 }

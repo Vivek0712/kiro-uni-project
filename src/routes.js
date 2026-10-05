@@ -8,10 +8,13 @@ import { join, extname, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import {
-  getEvents, getEvent, createEvent,
+  getEvents, getEvent, createEvent, getEventByPlatformId,
   getAttendees, getAttendeeByPassCode, getAttendeeByEmail,
   createAttendee, checkInAttendee,
 } from './db.js';
+import {
+  fetchPlatformMeetups, fetchPlatformStats,
+} from './platform.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PUBLIC_DIR = join(__dirname, '..', 'public');
@@ -98,7 +101,13 @@ async function handleCreateEvent(req, res) {
   if (isNaN(Number(capacity)) || Number(capacity) < 1) {
     return json(res, 400, { error: 'capacity must be a positive integer' });
   }
-  const event = await createEvent({ name, date, venue, capacity });
+  const event = await createEvent({
+    name,
+    date,
+    venue,
+    capacity,
+    ...(body.attendeePoints !== undefined && { attendeePoints: body.attendeePoints }),
+  });
   json(res, 201, event);
 }
 
@@ -153,6 +162,7 @@ async function handleCheckin(req, res) {
   json(res, 200, {
     success: true,
     attendee: { name: updated.name, email: updated.email, checkedInAt: updated.checkedInAt },
+    pointsAwarded: updated.pointsAwarded,
     eventName: event ? event.name : '',
   });
 }
@@ -164,16 +174,19 @@ async function handleDashboard(req, res, eventId) {
 
   const attendees = await getAttendees(eventId);
   const totalRsvp = attendees.length;
-  const totalCheckedIn = attendees.filter(a => a.checkedIn).length;
+  const checkedInAttendees = attendees.filter(a => a.checkedIn);
+  const totalCheckedIn = checkedInAttendees.length;
   const remaining = Math.max(0, event.capacity - totalCheckedIn);
+  const totalPointsAwarded = checkedInAttendees.reduce(
+    (sum, a) => sum + (a.pointsAwarded || 0), 0
+  );
 
-  const recentCheckIns = attendees
-    .filter(a => a.checkedIn)
+  const recentCheckIns = checkedInAttendees
     .sort((a, b) => new Date(b.checkedInAt) - new Date(a.checkedInAt))
     .slice(0, 10)
     .map(a => ({ name: a.name, email: a.email, checkedInAt: a.checkedInAt }));
 
-  json(res, 200, { event, totalRsvp, totalCheckedIn, remaining, recentCheckIns });
+  json(res, 200, { event, totalRsvp, totalCheckedIn, remaining, recentCheckIns, totalPointsAwarded });
 }
 
 /** GET /api/attendees/:eventId */
@@ -189,6 +202,7 @@ async function handleGetAttendees(req, res, eventId) {
     rsvpAt: a.rsvpAt,
     checkedIn: a.checkedIn,
     checkedInAt: a.checkedInAt,
+    pointsAwarded: a.pointsAwarded,
   }));
   json(res, 200, result);
 }
@@ -220,6 +234,137 @@ async function handleExport(req, res, eventId) {
   res.end(csv);
 }
 
+// ── Platform API Route Handlers ───────────────────────────────────────────────
+
+/** GET /api/platform/meetups */
+async function handlePlatformMeetups(req, res) {
+  try {
+    const meetups = await fetchPlatformMeetups();
+    json(res, 200, meetups);
+  } catch (err) {
+    json(res, 502, { error: err.message });
+  }
+}
+
+/** GET /api/platform/stats */
+async function handlePlatformStats(req, res) {
+  try {
+    const stats = await fetchPlatformStats();
+    json(res, 200, stats);
+  } catch (err) {
+    json(res, 502, { error: err.message });
+  }
+}
+
+/**
+ * POST /api/platform/import
+ * Body: { meetupId, attendeePoints? }
+ * Creates a local event linked to the platform meetup.
+ * Idempotent: returns existing event if already imported.
+ */
+async function handlePlatformImport(req, res) {
+  const body = await parseBody(req);
+  const { meetupId, attendeePoints } = body;
+  if (!meetupId) {
+    return json(res, 400, { error: 'meetupId is required' });
+  }
+
+  // Check for existing import (idempotency)
+  const existing = await getEventByPlatformId(meetupId);
+  if (existing) {
+    return json(res, 200, existing);
+  }
+
+  // Fetch from platform to get meetup details
+  let meetups;
+  try {
+    meetups = await fetchPlatformMeetups();
+  } catch (err) {
+    return json(res, 502, { error: err.message });
+  }
+
+  const platformMeetup = meetups.find(m => m.id === meetupId);
+  if (!platformMeetup) {
+    return json(res, 404, { error: 'Platform meetup not found' });
+  }
+
+  // Create a local event from the sanitized platform meetup
+  const event = await createEvent({
+    name: platformMeetup.title,
+    date: platformMeetup.date,
+    venue: 'AWS User Group Madurai',
+    capacity: platformMeetup.maxAttendees || 100,
+    platformMeetupId: platformMeetup.id,
+    type: platformMeetup.type,
+    image: platformMeetup.image,
+    meetupUrl: platformMeetup.meetupUrl,
+    attendeePoints: attendeePoints !== undefined ? Number(attendeePoints) : 10,
+  });
+
+  json(res, 201, event);
+}
+
+/**
+ * GET /api/leaderboard/:eventId
+ * Returns checked-in attendees ranked by pointsAwarded desc, then checkedInAt asc.
+ */
+async function handleLeaderboard(req, res, eventId) {
+  const event = await getEvent(eventId);
+  if (!event) return json(res, 404, { error: 'Event not found' });
+
+  const attendees = await getAttendees(eventId);
+  const checkedIn = attendees
+    .filter(a => a.checkedIn)
+    .sort((a, b) => {
+      // Sort by points descending
+      const pts = (b.pointsAwarded || 0) - (a.pointsAwarded || 0);
+      if (pts !== 0) return pts;
+      // Then by check-in time ascending (earlier = better rank)
+      return new Date(a.checkedInAt) - new Date(b.checkedInAt);
+    });
+
+  const leaderboard = checkedIn.map((a, i) => ({
+    rank: i + 1,
+    name: a.name,
+    email: a.email,
+    passCode: a.passCode,
+    checkedInAt: a.checkedInAt,
+    pointsAwarded: a.pointsAwarded,
+  }));
+
+  json(res, 200, leaderboard);
+}
+
+/**
+ * GET /api/platform/sync/:eventId
+ * Produces a JSON sync payload for the awsugmdu.in admin to import.
+ */
+async function handlePlatformSync(req, res, eventId) {
+  const event = await getEvent(eventId);
+  if (!event) return json(res, 404, { error: 'Event not found' });
+
+  const attendees = await getAttendees(eventId);
+  const checkedIn = attendees.filter(a => a.checkedIn);
+
+  const payload = {
+    platformMeetupId: event.platformMeetupId || null,
+    generatedAt: new Date().toISOString(),
+    checkedIn: checkedIn.map(a => ({
+      email: a.email,
+      name: a.name,
+      passCode: a.passCode,
+      checkedInAt: a.checkedInAt,
+      pointsAwarded: a.pointsAwarded,
+    })),
+    totals: {
+      checkedIn: checkedIn.length,
+      totalPoints: checkedIn.reduce((sum, a) => sum + (a.pointsAwarded || 0), 0),
+    },
+  };
+
+  json(res, 200, payload);
+}
+
 // ── Main Dispatcher ──────────────────────────────────────────────────────────
 
 /**
@@ -239,7 +384,7 @@ export async function handleRequest(req, res) {
   if (method === 'OPTIONS') { res.writeHead(204); res.end(); return; }
 
   try {
-    // API routes
+    // ── Core event routes ──────────────────────────────────────────────────
     if (path === '/api/events' && method === 'GET') return await handleGetEvents(req, res);
     if (path === '/api/events' && method === 'POST') return await handleCreateEvent(req, res);
     if (path.startsWith('/api/events/') && method === 'GET') {
@@ -255,6 +400,17 @@ export async function handleRequest(req, res) {
     }
     if (path.startsWith('/api/export/') && method === 'GET') {
       return await handleExport(req, res, path.slice('/api/export/'.length));
+    }
+
+    // ── Platform integration routes ────────────────────────────────────────
+    if (path === '/api/platform/meetups' && method === 'GET') return await handlePlatformMeetups(req, res);
+    if (path === '/api/platform/stats' && method === 'GET') return await handlePlatformStats(req, res);
+    if (path === '/api/platform/import' && method === 'POST') return await handlePlatformImport(req, res);
+    if (path.startsWith('/api/leaderboard/') && method === 'GET') {
+      return await handleLeaderboard(req, res, path.slice('/api/leaderboard/'.length));
+    }
+    if (path.startsWith('/api/platform/sync/') && method === 'GET') {
+      return await handlePlatformSync(req, res, path.slice('/api/platform/sync/'.length));
     }
 
     // Static files

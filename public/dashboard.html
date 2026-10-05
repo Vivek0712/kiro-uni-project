@@ -14,6 +14,7 @@
     <a href="/">Events</a>
     <a href="/checkin.html">Check-In</a>
     <a href="/dashboard.html">Dashboard</a>
+    <a href="/platform.html">Platform</a>
   </div>
 </nav>
 
@@ -41,16 +42,23 @@
       <div>
         <h1 id="event-title" style="font-size:1.6rem;font-weight:800;color:var(--secondary);"></h1>
         <p id="event-meta" class="text-muted"></p>
+        <!-- awsugmdu.in badge for imported events -->
+        <a id="platform-badge" href="#" target="_blank" rel="noopener"
+           class="badge badge-success"
+           style="display:none;font-size:0.72rem;text-decoration:none;margin-top:0.3rem;">
+          🌐 awsugmdu.in ↗
+        </a>
       </div>
       <div style="display:flex;gap:0.5rem;flex-wrap:wrap;align-items:center;">
         <span class="badge badge-success">● LIVE<span class="refresh-dot"></span></span>
+        <a id="sync-btn" href="#" class="btn btn-outline btn-sm" style="display:none;" title="Download sync file for awsugmdu.in admin">⬇ Sync File</a>
         <a id="export-btn" href="#" class="btn btn-outline btn-sm" target="_blank">⬇ Export CSV</a>
         <a href="/" class="btn btn-outline btn-sm">← Events</a>
       </div>
     </div>
 
-    <!-- Stat cards -->
-    <div class="stats-grid">
+    <!-- Stat cards (5 cards: adds Points Awarded) -->
+    <div class="stats-grid" style="grid-template-columns:repeat(auto-fit,minmax(130px,1fr));">
       <div class="stat-card">
         <div class="stat-number" id="stat-rsvp">—</div>
         <div class="stat-label">Total RSVPs</div>
@@ -67,6 +75,10 @@
         <div class="stat-number" id="stat-capacity">—</div>
         <div class="stat-label">Total Capacity</div>
       </div>
+      <div class="stat-card" id="stat-points-card" style="display:none;">
+        <div class="stat-number" id="stat-points" style="color:#7c3aed;">—</div>
+        <div class="stat-label">Points Awarded</div>
+      </div>
     </div>
 
     <!-- Capacity progress bar -->
@@ -80,15 +92,28 @@
       </div>
     </div>
 
-    <!-- Two-column layout -->
-    <div style="display:grid;grid-template-columns:minmax(220px,1fr) 1.8fr;gap:1rem;margin-top:1rem;">
+    <!-- Three-column layout: recent | attendees | leaderboard -->
+    <div id="main-grid" style="display:grid;grid-template-columns:minmax(200px,1fr) 1.8fr;gap:1rem;margin-top:1rem;">
 
-      <!-- Recent check-ins -->
-      <div class="card" style="align-self:start;">
-        <div class="card-title">Recent Check-Ins</div>
-        <ul id="recent-list" class="checkin-feed">
-          <li style="color:var(--text-muted);font-size:0.85rem;background:none;border:none;">No check-ins yet.</li>
-        </ul>
+      <!-- Left column: recent check-ins + top attendees -->
+      <div style="display:flex;flex-direction:column;gap:1rem;">
+
+        <!-- Recent check-ins -->
+        <div class="card" style="align-self:start;">
+          <div class="card-title">Recent Check-Ins</div>
+          <ul id="recent-list" class="checkin-feed">
+            <li style="color:var(--text-muted);font-size:0.85rem;background:none;border:none;">No check-ins yet.</li>
+          </ul>
+        </div>
+
+        <!-- Top Attendees leaderboard (shown only when event has points) -->
+        <div class="card" id="leaderboard-card" style="display:none;align-self:start;">
+          <div class="card-title">🏆 Top Attendees</div>
+          <ul id="leaderboard-list" style="list-style:none;margin:0;padding:0;">
+            <li style="color:var(--text-muted);font-size:0.85rem;">No check-ins yet.</li>
+          </ul>
+        </div>
+
       </div>
 
       <!-- Attendees table -->
@@ -124,6 +149,7 @@
 
   let currentEventId = getParam('eventId');
   let refreshTimer;
+  let currentEvent = null;
 
   // ── Initialise ──────────────────────────────────────────────────
   async function init() {
@@ -172,20 +198,50 @@
         api(`/api/dashboard/${currentEventId}`),
         api(`/api/attendees/${currentEventId}`),
       ]);
+      currentEvent = stats.event;
       renderStats(stats);
       renderAttendees(attendees);
       renderRecent(stats.recentCheckIns);
+      await renderLeaderboard(stats);
     } catch (e) { /* silently retry */ }
   }
 
-  function renderStats({ event, totalRsvp, totalCheckedIn, remaining }) {
+  function renderStats({ event, totalRsvp, totalCheckedIn, remaining, totalPointsAwarded }) {
     document.getElementById('event-title').textContent = event.name;
     document.getElementById('event-meta').textContent =
       `📅 ${fmtDate(event.date)}  ·  📍 ${event.venue}`;
+
+    // awsugmdu.in badge for imported events
+    const badge = document.getElementById('platform-badge');
+    if (event.platformMeetupId && event.meetupUrl) {
+      badge.href = event.meetupUrl;
+      badge.style.display = 'inline-flex';
+    } else {
+      badge.style.display = 'none';
+    }
+
+    // Sync file button for platform-linked events
+    const syncBtn = document.getElementById('sync-btn');
+    if (event.platformMeetupId) {
+      syncBtn.href = `/api/platform/sync/${currentEventId}`;
+      syncBtn.download = `sync-${currentEventId}.json`;
+      syncBtn.style.display = 'inline-flex';
+    } else {
+      syncBtn.style.display = 'none';
+    }
+
     document.getElementById('stat-rsvp').textContent      = totalRsvp;
     document.getElementById('stat-checked').textContent   = totalCheckedIn;
     document.getElementById('stat-remaining').textContent = remaining;
     document.getElementById('stat-capacity').textContent  = event.capacity;
+
+    // Points tile — only shown if event has attendeePoints
+    if (event.attendeePoints > 0) {
+      document.getElementById('stat-points-card').style.display = '';
+      document.getElementById('stat-points').textContent = totalPointsAwarded || 0;
+    } else {
+      document.getElementById('stat-points-card').style.display = 'none';
+    }
 
     const pct = event.capacity > 0
       ? Math.min(100, Math.round(totalCheckedIn / event.capacity * 100))
@@ -195,6 +251,37 @@
     bar.className = 'progress-bar' + (pct >= 90 ? ' danger' : '');
     document.getElementById('capacity-label').textContent =
       `${totalCheckedIn} / ${event.capacity} (${pct}%)`;
+  }
+
+  async function renderLeaderboard(stats) {
+    const card = document.getElementById('leaderboard-card');
+    if (!currentEvent || !currentEvent.attendeePoints) {
+      card.style.display = 'none';
+      return;
+    }
+    try {
+      const lb = await api(`/api/leaderboard/${currentEventId}`);
+      const list = document.getElementById('leaderboard-list');
+      if (!lb || lb.length === 0) {
+        card.style.display = 'none';
+        return;
+      }
+      card.style.display = '';
+      const top5 = lb.slice(0, 5);
+      list.innerHTML = top5.map(entry => `
+        <li style="display:flex;align-items:center;gap:0.5rem;padding:0.4rem 0;border-bottom:1px solid var(--border);">
+          <span style="font-size:1rem;font-weight:800;min-width:1.5rem;text-align:center;color:${entry.rank <= 3 ? '#d97706' : 'var(--text-muted)'};">
+            ${entry.rank <= 3 ? ['🥇','🥈','🥉'][entry.rank-1] : entry.rank}
+          </span>
+          <div style="flex:1;min-width:0;">
+            <div style="font-weight:600;font-size:0.85rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(entry.name)}</div>
+            <div style="font-size:0.75rem;color:var(--text-muted);">${fmtDateTime(entry.checkedInAt)}</div>
+          </div>
+          <span style="font-size:0.85rem;font-weight:700;color:#7c3aed;">${entry.pointsAwarded ?? 0} pts</span>
+        </li>`).join('');
+    } catch {
+      card.style.display = 'none';
+    }
   }
 
   function renderRecent(recentCheckIns) {
@@ -231,7 +318,7 @@
         <td style="font-weight:600;">${esc(a.name)}</td>
         <td class="text-muted" style="font-size:0.85rem;">${esc(a.email)}</td>
         <td>${a.checkedIn
-          ? '<span class="badge badge-success">✓ Checked In</span>'
+          ? `<span class="badge badge-success">✓ Checked In</span>${a.pointsAwarded ? ` <span style="font-size:0.7rem;color:#7c3aed;">+${a.pointsAwarded}pts</span>` : ''}`
           : '<span class="badge badge-neutral">RSVP\'d</span>'}</td>
         <td class="text-muted" style="font-size:0.8rem;">${fmtDateTime(a.checkedInAt)}</td>
       </tr>`).join('');

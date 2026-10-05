@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Import from awsugmdu.in — MeetupPass</title>
+  <link rel="stylesheet" href="/style.css" />
+  <style>
+    .platform-banner {
+      background: linear-gradient(135deg, var(--primary) 0%, #1a3a5c 100%);
+      color: #fff;
+      border-radius: var(--radius);
+      padding: 1.25rem 1.5rem;
+      margin-bottom: 1.5rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+    }
+    .platform-banner h2 {
+      margin: 0 0 0.2rem;
+      font-size: 1.1rem;
+      font-weight: 700;
+    }
+    .platform-banner p {
+      margin: 0;
+      font-size: 0.85rem;
+      opacity: 0.85;
+    }
+    .platform-banner .stats-row {
+      display: flex;
+      gap: 1.5rem;
+      flex-wrap: wrap;
+    }
+    .platform-banner .stat-item {
+      text-align: center;
+    }
+    .platform-banner .stat-num {
+      font-size: 1.6rem;
+      font-weight: 800;
+      line-height: 1;
+    }
+    .platform-banner .stat-lbl {
+      font-size: 0.75rem;
+      opacity: 0.8;
+      margin-top: 0.1rem;
+    }
+    .platform-banner a {
+      color: #fff;
+      opacity: 0.9;
+      font-size: 0.85rem;
+      text-decoration: underline;
+    }
+    .platform-banner a:hover { opacity: 1; }
+
+    .meetup-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 1rem;
+    }
+    .meetup-card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+      transition: box-shadow 0.15s;
+    }
+    .meetup-card:hover { box-shadow: 0 4px 16px rgba(0,0,0,0.08); }
+    .meetup-card-img {
+      width: 100%;
+      height: 140px;
+      object-fit: cover;
+      background: var(--border);
+      display: block;
+    }
+    .meetup-card-img-placeholder {
+      width: 100%;
+      height: 140px;
+      background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 2.5rem;
+    }
+    .meetup-card-body {
+      padding: 1rem;
+    }
+    .meetup-card-title {
+      font-weight: 700;
+      font-size: 0.95rem;
+      margin-bottom: 0.4rem;
+      color: var(--text);
+    }
+    .meetup-card-meta {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      display: flex;
+      flex-direction: column;
+      gap: 0.2rem;
+      margin-bottom: 0.75rem;
+    }
+    .meetup-card-badges {
+      display: flex;
+      gap: 0.4rem;
+      flex-wrap: wrap;
+      margin-bottom: 0.75rem;
+    }
+    .badge-type {
+      background: #e8f4fd;
+      color: #1a6ea8;
+      font-size: 0.7rem;
+      padding: 0.2rem 0.5rem;
+      border-radius: 100px;
+      font-weight: 600;
+      text-transform: capitalize;
+    }
+    .badge-status-completed {
+      background: #e6f9ee;
+      color: #1a7a3c;
+      font-size: 0.7rem;
+      padding: 0.2rem 0.5rem;
+      border-radius: 100px;
+      font-weight: 600;
+    }
+    .badge-status-upcoming {
+      background: #fff3e0;
+      color: #b35a00;
+      font-size: 0.7rem;
+      padding: 0.2rem 0.5rem;
+      border-radius: 100px;
+      font-weight: 600;
+    }
+    .badge-status-other {
+      background: var(--border);
+      color: var(--text-muted);
+      font-size: 0.7rem;
+      padding: 0.2rem 0.5rem;
+      border-radius: 100px;
+      font-weight: 600;
+    }
+    .meetup-card-actions {
+      display: flex;
+      gap: 0.5rem;
+    }
+    .error-state {
+      text-align: center;
+      padding: 3rem 1rem;
+      color: var(--text-muted);
+    }
+    .error-state .icon { font-size: 2.5rem; margin-bottom: 0.5rem; }
+    .loading-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 1rem;
+    }
+    .skeleton-card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+      opacity: 0.5;
+    }
+    .skeleton-img {
+      width: 100%;
+      height: 140px;
+      background: var(--border);
+    }
+    .skeleton-body { padding: 1rem; }
+    .skeleton-line {
+      height: 0.8rem;
+      background: var(--border);
+      border-radius: 4px;
+      margin-bottom: 0.5rem;
+    }
+    .skeleton-line.short { width: 60%; }
+    .skeleton-line.shorter { width: 40%; }
+  </style>
+</head>
+<body>
+
+<nav class="nav">
+  <a class="nav-logo" href="/">Meetup<span>Pass</span></a>
+  <div class="nav-links">
+    <a href="/">Events</a>
+    <a href="/checkin.html">Check-In</a>
+    <a href="/dashboard.html">Dashboard</a>
+    <a href="/platform.html" class="active">Platform</a>
+  </div>
+</nav>
+
+<div class="container">
+
+  <!-- Platform stats banner -->
+  <div id="platform-banner" class="platform-banner mt-3">
+    <div>
+      <h2>🇮🇳 AWS User Group Madurai</h2>
+      <p>The official community platform — importing meetups from awsugmdu.in</p>
+      <a href="https://www.awsugmdu.in" target="_blank" rel="noopener">Visit awsugmdu.in ↗</a>
+    </div>
+    <div class="stats-row" id="platform-stats-row">
+      <div class="stat-item"><div class="stat-num" id="stat-members">—</div><div class="stat-lbl">Members</div></div>
+      <div class="stat-item"><div class="stat-num" id="stat-meetups">—</div><div class="stat-lbl">Meetups</div></div>
+      <div class="stat-item"><div class="stat-num" id="stat-badges">—</div><div class="stat-lbl">Badges</div></div>
+    </div>
+  </div>
+
+  <!-- Page header -->
+  <div class="page-header">
+    <h1>Import from awsugmdu.in</h1>
+    <p>Click <strong>Import</strong> to create a local MeetupPass event linked to a platform meetup. Points will be awarded at check-in.</p>
+  </div>
+
+  <!-- Meetup cards -->
+  <div id="meetups-container">
+    <!-- Skeleton loading state -->
+    <div class="loading-grid" id="skeleton">
+      ${Array(6).fill(`
+      <div class="skeleton-card">
+        <div class="skeleton-img"></div>
+        <div class="skeleton-body">
+          <div class="skeleton-line"></div>
+          <div class="skeleton-line short"></div>
+          <div class="skeleton-line shorter"></div>
+        </div>
+      </div>`).join('')}
+    </div>
+  </div>
+
+</div>
+
+<script type="module">
+  import { api, fmtDate, toast } from '/app.js';
+
+  // Track which platform meetup IDs are already imported
+  let importedIds = new Set();
+
+  async function init() {
+    await Promise.all([loadStats(), loadMeetups()]);
+  }
+
+  async function loadStats() {
+    try {
+      const stats = await api('/api/platform/stats');
+      document.getElementById('stat-members').textContent = stats.memberCount ?? '—';
+      document.getElementById('stat-meetups').textContent = stats.meetupCount ?? '—';
+      document.getElementById('stat-badges').textContent = stats.badgeCount ?? '—';
+    } catch {
+      // silently fail — stats are decorative
+    }
+  }
+
+  async function loadMeetups() {
+    const container = document.getElementById('meetups-container');
+    try {
+      // Fetch platform meetups and local events in parallel
+      const [meetups, localEvents] = await Promise.all([
+        api('/api/platform/meetups'),
+        api('/api/events'),
+      ]);
+
+      // Build set of already-imported platform IDs
+      importedIds = new Set(
+        localEvents
+          .filter(e => e.platformMeetupId)
+          .map(e => ({ pid: e.platformMeetupId, id: e.id }))
+      );
+
+      // Map from platformMeetupId → local event id
+      const importedMap = {};
+      for (const e of localEvents) {
+        if (e.platformMeetupId) importedMap[e.platformMeetupId] = e.id;
+      }
+
+      if (meetups.length === 0) {
+        container.innerHTML = `
+          <div class="error-state">
+            <div class="icon">📭</div>
+            <p>No meetups found on the platform.</p>
+          </div>`;
+        return;
+      }
+
+      container.innerHTML = `<div class="meetup-grid">${meetups.map(m => renderCard(m, importedMap[m.id])).join('')}</div>`;
+
+      // Attach import handlers
+      container.querySelectorAll('[data-import]').forEach(btn => {
+        btn.addEventListener('click', () => handleImport(btn.dataset.import, btn));
+      });
+
+    } catch (err) {
+      container.innerHTML = `
+        <div class="error-state card">
+          <div class="icon">⚠️</div>
+          <p>Could not load platform meetups.</p>
+          <p style="font-size:0.85rem;">${esc(err.message)}</p>
+          <button class="btn btn-outline mt-2" onclick="location.reload()">Retry</button>
+        </div>`;
+    }
+  }
+
+  function renderCard(m, localEventId) {
+    const statusBadgeClass =
+      m.status === 'completed' ? 'badge-status-completed' :
+      m.status === 'upcoming'  ? 'badge-status-upcoming' :
+      'badge-status-other';
+
+    const imgHtml = m.image
+      ? `<img class="meetup-card-img" src="${esc(m.image)}" alt="${esc(m.title)}" loading="lazy" onerror="this.style.display='none';this.nextSibling.style.display='flex'" /><div class="meetup-card-img-placeholder" style="display:none">🎙</div>`
+      : `<div class="meetup-card-img-placeholder">🎙</div>`;
+
+    const actionBtn = localEventId
+      ? `<a class="btn btn-outline btn-sm" href="/dashboard.html?eventId=${esc(localEventId)}">✓ View</a>`
+      : `<button class="btn btn-primary btn-sm" data-import="${esc(m.id)}">Import</button>`;
+
+    return `
+    <div class="meetup-card">
+      ${imgHtml}
+      <div class="meetup-card-body">
+        <div class="meetup-card-title">${esc(m.title)}</div>
+        <div class="meetup-card-meta">
+          <span>📅 ${fmtDate(m.date)}${m.time ? '  ·  ⏰ ' + esc(m.time) : ''}</span>
+          <span>👥 Capacity: ${m.maxAttendees ?? '—'}${m.attendees ? '  ('+m.attendees+' registered)' : ''}</span>
+          ${m.meetupUrl ? `<a href="${esc(m.meetupUrl)}" target="_blank" rel="noopener" style="font-size:0.78rem;color:var(--primary);">View on awsugmdu.in ↗</a>` : ''}
+        </div>
+        <div class="meetup-card-badges">
+          ${m.type ? `<span class="badge-type">${esc(m.type)}</span>` : ''}
+          <span class="${statusBadgeClass}">${esc(m.status || 'unknown')}</span>
+          ${m.hostPoints ? `<span class="badge-neutral" style="font-size:0.7rem;padding:0.2rem 0.5rem;background:#f5f0ff;color:#6b3fa0;border-radius:100px;font-weight:600;">🏆 ${m.hostPoints}pts host</span>` : ''}
+        </div>
+        <div class="meetup-card-actions">
+          ${actionBtn}
+        </div>
+      </div>
+    </div>`;
+  }
+
+  async function handleImport(meetupId, btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span>';
+    try {
+      const event = await api('/api/platform/import', {
+        method: 'POST',
+        body: { meetupId },
+      });
+      toast(`Imported! Event created: "${event.name}"`, 'success');
+      // Reload meetups to update button states
+      await loadMeetups();
+    } catch (err) {
+      toast(err.message || 'Import failed', 'error');
+      btn.disabled = false;
+      btn.textContent = 'Import';
+    }
+  }
+
+  function esc(s) {
+    if (s == null) return '';
+    const d = document.createElement('div');
+    d.textContent = String(s);
+    return d.innerHTML;
+  }
+
+  init();
+</script>
+</body>
+</html>

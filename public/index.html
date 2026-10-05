@@ -14,6 +14,7 @@
     <a href="/">Events</a>
     <a href="/checkin.html">Check-In</a>
     <a href="/dashboard.html">Dashboard</a>
+    <a href="/platform.html">Platform</a>
   </div>
 </nav>
 
@@ -83,13 +84,17 @@
   }
 
   function renderEventCard(evt) {
+    const platformBadge = evt.platformMeetupId && evt.meetupUrl
+      ? `<a class="badge badge-success" href="${esc(evt.meetupUrl)}" target="_blank" rel="noopener" style="font-size:0.7rem;text-decoration:none;" title="Imported from awsugmdu.in">🌐 awsugmdu.in</a>`
+      : '';
     return `
       <div class="event-card">
-        <div class="event-card-name">${esc(evt.name)}</div>
+        <div class="event-card-name">${esc(evt.name)} ${platformBadge}</div>
         <div class="event-card-meta">
           <span>📅 ${fmtDate(evt.date)}</span>
           <span>📍 ${esc(evt.venue)}</span>
           <span>👥 Capacity: ${evt.capacity}</span>
+          ${evt.attendeePoints ? `<span>🏆 ${evt.attendeePoints} pts/check-in</span>` : ''}
         </div>
         <div class="event-card-actions">
           <a class="btn btn-primary btn-sm" href="/rsvp.html?eventId=${evt.id}">RSVP</a>

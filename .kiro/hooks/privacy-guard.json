@@ -1,0 +1,16 @@
+{
+  "version": "v1",
+  "hooks": [
+    {
+      "name": "Privacy Guard — Block Real Emails in Repo",
+      "description": "Scans data/, docs/, and src/ for real-looking email addresses whenever a src/*.js or mcp/*.js file is edited. Fails loudly if any non-example-domain email is found, preventing accidental PII leakage from the platform API.",
+      "trigger": "FileEdited",
+      "matcher": "src/.*\\.js$|mcp/.*\\.js$",
+      "action": {
+        "type": "command",
+        "command": "! grep -rE \"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}\" data/ docs/ src/ --include=\"*.json\" --include=\"*.js\" --include=\"*.md\" --exclude-dir=node_modules --exclude-dir=.git 2>/dev/null | grep -v \"@example\\.com\\|@example\\.org\\|@test\\.com\\|@domain\\.\\|placeholder\\|your-email\" || (echo \"PRIVACY VIOLATION: Real email found in repo\" && exit 1)",
+        "timeout": 15
+      }
+    }
+  ]
+}
